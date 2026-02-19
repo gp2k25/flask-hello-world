@@ -2,20 +2,27 @@ from flask import Flask, render_template_string
 
 app = Flask(__name__)
 
-# We'll use a template string so you don't need a separate HTML file
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Flask Snake</title>
+    <title>Flask Snake Pro</title>
     <style>
-        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #2c3e50; color: white; font-family: sans-serif; flex-direction: column; }
-        canvas { border: 5px solid #ecf0f1; box-shadow: 0 0 20px rgba(0,0,0,0.5); background: #000; }
-        h1 { margin-bottom: 10px; }
+        body { 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; margin: 0; background: #1a1a2e; 
+            color: #e94560; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            flex-direction: column; 
+        }
+        canvas { 
+            border: 4px solid #e94560; border-radius: 10px;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.3); background: #16213e; 
+        }
+        .stats { margin-bottom: 20px; font-size: 24px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>Snake Score: <span id="score">0</span></h1>
+    <div class="stats">SCORE: <span id="score">0</span></div>
     <canvas id="snakeGame" width="400" height="400"></canvas>
 
     <script>
@@ -23,33 +30,49 @@ HTML_TEMPLATE = """
         const ctx = canvas.getContext("2d");
         const scoreElement = document.getElementById("score");
 
-        let box = 20;
+        const box = 20;
         let score = 0;
-        let snake = [{x: 9 * box, y: 10 * box}];
-        let food = { x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box };
-        let d;
+        let snake = [{x: 10 * box, y: 10 * box}];
+        let food = { x: Math.floor(Math.random() * 20) * box, y: Math.floor(Math.random() * 20) * box };
+        
+        let d = "RIGHT"; // Initial direction
+        let nextD = "RIGHT"; // Buffer for the next move
+        let moveProcessed = true; // Prevents "suicide turns"
 
-        document.addEventListener("keydown", direction);
+        document.addEventListener("keydown", (event) => {
+            if (!moveProcessed) return; // Ignore input if we haven't moved yet
 
-        function direction(event) {
-            if(event.keyCode == 37 && d != "RIGHT") d = "LEFT";
-            else if(event.keyCode == 38 && d != "DOWN") d = "UP";
-            else if(event.keyCode == 39 && d != "LEFT") d = "RIGHT";
-            else if(event.keyCode == 40 && d != "UP") d = "DOWN";
-        }
+            const key = event.keyCode;
+            if(key == 37 && d != "RIGHT") { nextD = "LEFT"; moveProcessed = false; }
+            else if(key == 38 && d != "DOWN") { nextD = "UP"; moveProcessed = false; }
+            else if(key == 39 && d != "LEFT") { nextD = "RIGHT"; moveProcessed = false; }
+            else if(key == 40 && d != "UP") { nextD = "DOWN"; moveProcessed = false; }
+        });
 
         function draw() {
-            ctx.fillStyle = "black";
+            // Update direction from buffer
+            d = nextD;
+            moveProcessed = true;
+
+            // Clear Canvas
+            ctx.fillStyle = "#16213e";
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // Draw Snake
             for(let i = 0; i < snake.length; i++) {
-                ctx.fillStyle = (i == 0) ? "#2ecc71" : "#27ae60";
+                ctx.fillStyle = (i == 0) ? "#e94560" : "#0f3460";
+                ctx.strokeStyle = "#16213e";
                 ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
             }
 
-            ctx.fillStyle = "#e74c3c";
-            ctx.fillRect(food.x, food.y, box, box);
+            // Draw Food
+            ctx.fillStyle = "#00d2d3";
+            ctx.beginPath();
+            ctx.arc(food.x + box/2, food.y + box/2, box/2 - 2, 0, Math.PI * 2);
+            ctx.fill();
 
+            // Calculate movement
             let snakeX = snake[0].x;
             let snakeY = snake[0].y;
 
@@ -58,30 +81,36 @@ HTML_TEMPLATE = """
             if( d == "RIGHT") snakeX += box;
             if( d == "DOWN") snakeY += box;
 
+            let newHead = { x: snakeX, y: snakeY };
+
+            // COLLISION RULES
+            // 1. Wall Check
+            if(snakeX < 0 || snakeX >= canvas.width || snakeY < 0 || snakeY >= canvas.height) {
+                gameOver(); return;
+            }
+            // 2. Self Collision Check
+            for(let i = 0; i < snake.length; i++) {
+                if(newHead.x == snake[i].x && newHead.y == snake[i].y) {
+                    gameOver(); return;
+                }
+            }
+
+            // 3. Eating Food
             if(snakeX == food.x && snakeY == food.y) {
                 score++;
                 scoreElement.innerHTML = score;
-                food = { x: Math.floor(Math.random() * 19 + 1) * box, y: Math.floor(Math.random() * 19 + 1) * box };
+                food = { x: Math.floor(Math.random() * 20) * box, y: Math.floor(Math.random() * 20) * box };
             } else {
-                snake.pop();
+                snake.pop(); // Remove tail
             }
 
-            let newHead = { x: snakeX, y: snakeY };
-
-            if(snakeX < 0 || snakeX >= canvas.width || snakeY < 0 || snakeY >= canvas.height || collision(newHead, snake)) {
-                clearInterval(game);
-                alert("Game Over! Score: " + score);
-                location.reload();
-            }
-
-            snake.unshift(newHead);
+            snake.unshift(newHead); // Add new head
         }
 
-        function collision(head, array) {
-            for(let i = 0; i < array.length; i++) {
-                if(head.x == array[i].x && head.y == array[i].y) return true;
-            }
-            return false;
+        function gameOver() {
+            clearInterval(game);
+            alert("GAME OVER! Final Score: " + score);
+            location.reload();
         }
 
         let game = setInterval(draw, 100);
